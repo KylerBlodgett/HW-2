@@ -1,6 +1,6 @@
 ---
 title: "MATH 216 Homework 2"
-author: "WRITE YOUR NAME HERE"
+author: "Kyler Blodgett"
 output: html_document
 ---
 
@@ -8,6 +8,9 @@ output: html_document
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(foreign))
+suppressPackageStartupMessages(library(plotly))
+suppressPackageStartupMessages(library(knitr))
+suppressPackageStartupMessages(library(tidyr))
 ```
 
 
@@ -15,14 +18,28 @@ suppressPackageStartupMessages(library(foreign))
 
 Please indicate
 
-* Who you collaborated with:
-* Roughly how much time you spent on this HW:
-* What gave you the most trouble:
-* Any comments you have: 
+* Who you collaborated with: Joy, Christian, Mo, Delaney
+* Roughly how much time you spent on this HW: 8 hours 
+* What gave you the most trouble: Cross-validation, I still don't fully understand the predict function. And bracketing by age in the drinking habits visualizations of question 2. There should be a better way to facet by decade or something, but I couldnt get it.
+* Any comments you have: I have more work to do on Question 2, I know mine is currently a pretty limited response. 
 
-
-
-
+  Variables:   
+PREC   Average annual precipitation in inches
+JANT   Average January temperature in degrees F
+JULT   Same for July
+OVR65  % of 1960 SMSA population aged 65 or older
+POPN   Average household size
+EDUC   Median school years completed by those over 22
+HOUS   % of housing units which are sound & with all facilities
+DENS   Population per sq. mile in urbanized areas, 1960
+NONW   % non-white population in urbanized areas, 1960
+WWDRK  % employed in white collar occupations
+POOR   % of families with income < $3000
+HC     Relative hydrocarbon pollution potential
+NOX    Same for nitric oxides
+SO@    Same for sulphur dioxide
+HUMID  Annual average % relative humidity at 1pm
+MORT   Total age-adjusted mortality rate per 100,000
 
 
 
@@ -44,16 +61,59 @@ pollution <- read.dta(url) %>%
 ### a)
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
+nox_plot <- ggplot(data=pollution, aes(x=nox, y=mort))+
+  geom_point() +
+  geom_jitter() +
+  labs(x= "Relative Nitric Oxide Pollution Potential", y= "Mortality per 100,000 people") +
+  ggtitle("Mortality Rate vs. Nitric Oxide Level")
 
+nox_plot +
+  geom_smooth(method="lm", size=1)
+
+model1 <- lm(mort ~ nox, data=pollution)
+summary(model1)
+
+pollutionresid <- pollution %>%
+  mutate(resid1 = resid(model1))
+
+ggplot(data=pollutionresid, aes(x=nox, y=resid1))+
+  geom_point()+
+  labs(x= "NOX", y= "Residuals") +
+  geom_hline(yintercept = 0)
+
+av_res <- mean(pollutionresid$resid1)
+av_res
 ```
 
+I doubt that a linear regression will these data well because of the lack of a clear directional association between nitric oxide levels and mortality. Also, there are two very high NOX values that are skewing the dataset away from being more predictive. I therefore expect a very low R-squared value and a possible failure to reject the null hypothesis that nitric oxide levels have no statistical bearing on mortality. 
+
+We see no clear pattern along the residuals when plotted again the independent variable, NOX. Therefore we take them to be normally distributed around zero, something we are comfortable doing since the average residual value is 3.49e-15.
 
 ### b)
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
+model2 <- lm(mort ~ log(nox), data=pollution)
+summary(model2)
 
+ggplot(data=pollution, aes(x=log(nox), y=mort))+
+  geom_point() +
+  geom_jitter() +
+  labs(x= "Log of Nitric Oxide Pollution Potential", y= "Mortality per 100,000 people") +
+  ggtitle("Mortality Rate vs. Log of Nitric Oxide Level") +
+   geom_smooth(method="lm", size=1)
+ 
+
+pollutionresid2 <- pollution %>%
+  mutate(resid2 = resid(model2))
+
+ggplot(data=pollutionresid2, aes(x=log(nox), y=resid2))+
+  geom_point()+
+  labs(x= "logNOX", y= "Residuals") +
+  geom_hline(yintercept = 0) +
+  ggtitle("Residuals of Model 2 versus log(NOX) Values")
 ```
 
+In this new residual plot, we see an apparently random distribution of residuals that are not so left-skewed. This is good news for this model in that its residuals are normally distributed and average to zero (mean of resid2 = -1.60 e-15). 
 
 ### c)
 
@@ -61,29 +121,47 @@ pollution <- read.dta(url) %>%
 
 ```
 
+According to the lin-log model above, a one-percent increase in relative 
+nitric oxide pollution potential is associated with a 15.335 (beta1-hat)
+increase in age-adjusted morality rate per 100,000 people. 
 
 ### d)
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
+model3 <- lm(log(mort) ~ nox + so2 + hc, data=pollution)
+summary(model3) 
 
+ggplot(data=pollution, aes(x=nox, y=log(mort), size = so2, color = hc)) +
+  geom_point() +
+  geom_jitter() +
+  labs(x= "NOX", y= "Log of Mortality Rate, per 100K") +
+  geom_smooth(method="lm")
 ```
 
+Despite the limitations of mapping a four-dimensional model on a two dimensional surface, we can still draw conclusions from the numerical regression. We find that a unit increase in relative nitric oxide pollution potential (NOX) is associated with a 0.32% increase in mortality rate per 100,000 people. For its part, a unit increase in relative hydrocarbon potential is associated with a small but non-zero (0.02) percent increase in mortality rate. Relative pollution potential does not have a statistically significant effect on mortality rate. Though two of our independent variables are statistically significant, there are of course many other factors that effect mortality rate, thus explaining why our model only account for 31% of the variation in mortality rate (see adjusted R-squared of 0.31).
 
 ### e)
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
+pollution_lowhalf <- slice(pollution, 1:30)
+pollution_uphalf <- slice(pollution, 31:60)
 
+model <- lm(log(mort) ~ nox + so2 + hc, data=pollution_lowhalf)
+predict(model)
+predicted_vals <- predict(model, pollution_uphalf)
+kable(head(predicted_vals), format = "markdown", col.names = "Predicted Values", 
+      digits = 3)
 ```
 
+This table shows the predicted values for the second half of the pollution data, as predicted by the model in (d), though I'm not sure how to make it show all the values. It would be ideal if we could compare the residuals when these predicted values are plotted against the true values of the second half of the data, but I am not sure how to make the "Predicted Values" table a data frame to do that. 
 
 ### f) What do you think are the reasons for using cross-validation?
 
-
+Cross-validation is an important method for testing how well a model explains "new" data points to see if it is truly predictive of the dependent variable.  
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
 
 ```
-
 
 
 
@@ -110,12 +188,125 @@ profiles <- read.csv("profiles.csv", header=TRUE) %>% tbl_df()
 
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
-# Feel free to make multiple code blocks, but set echo, fig.width, fig.height as 
-# above
+#Income and orientation - to see which ethnicity has highest avg eranings
+# according to the person's sexual orientation
+profiles_income <- filter(profiles, income != -1) %>%
+  separate(ethnicity, c("eth1", "eth_rest"), sep=",") %>%
+  na.omit(eth1) %>% #is this right or is it removing too many?
+  group_by(sex, eth1, orientation) %>%
+  summarize("mean_income" = mean(income))
+  
+profiles_income$eth_rest<- NULL
+
+ggplot(data=profiles_income, aes(x=eth1, y=mean_income)) +
+  geom_bar(stat="identity") +
+  facet_wrap(~orientation + sex) +
+  labs(x= "Primary Ethnicity Listed", y = "Average Income") +
+  ggtitle("Average Income by Ethnicity and Attraction")
 ```
 
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
-# Feel free to make multiple code blocks, but set echo, fig.width, fig.height as 
-# above
+#student age data
+profiles_student <- filter(profiles, job== "student", age <= 100) %>%
+group_by(age) %>%
+tally() %>%
+rename("Students_by_Age" = n)
+
+v <- mean(profiles_student$age)
+v <- 24.92
+
+ggplot(data=profiles_student, aes(x=age, y=Students_by_Age)) +
+  geom_line() +
+  labs(x="Age", y= "Students of a Certain Age") +
+  geom_vline(xintercept = v, color = "RED") +
+  ggtitle("Distribution of Students by Age")
+
 ```
+
+```{r, echo=FALSE, fig.width=12, fig.height=6}
+# Drinking habits by gender and age bracket
+profiles_10s <- filter(profiles, (10<=age & age<=19)) %>%
+  na.exclude(drinks) %>% #why isn't this excluding blanks??
+  group_by(sex, drinks) %>%
+  tally() %>%
+  rename(num_drinking = n)
+profiles_20s <- filter(profiles, (20<=age & age<=29)) %>%
+  na.exclude(drinks) %>% #why isn't this excluding blanks??
+  group_by(sex, drinks) %>%
+  tally() %>%
+  rename(num_drinking = n)
+profiles_30s <- filter(profiles, (30<=age & age<=39)) %>%
+  na.exclude(drinks) %>% #why isn't this excluding blanks??
+  group_by(sex, drinks) %>%
+  tally() %>%
+  rename(num_drinking = n)
+profiles_40s <- filter(profiles, (40<=age & age<=49)) %>%
+  na.exclude(drinks) %>% #why isn't this excluding blanks??
+  group_by(sex, drinks) %>%
+  tally() %>%
+  rename(num_drinking = n)
+profiles_50s <- filter(profiles, (50<=age & age<=59)) %>%
+  na.exclude(drinks) %>% #why isn't this excluding blanks??
+  group_by(sex, drinks) %>%
+  tally() %>%
+  rename(num_drinking = n)
+profiles_60s <- filter(profiles, (60<=age & age<=69)) %>%
+  na.exclude(drinks) %>% #why isn't this excluding blanks??
+  group_by(sex, drinks) %>%
+  tally() %>%
+  rename(num_drinking = n)
+
+
+gendrinks10<- ggplot(data = profiles_10s, aes(x=drinks, y = num_drinking))+
+  geom_bar(position = "stack", stat = "identity", aes(fill=sex)) +
+  labs(x = "Drinking Habits", y = "Number of People") +
+  ggtitle("Drinking Habits Among Users in their Teens, by Sex")
+  ggplotly(gendrinks10)
+  
+gendrinks20<- ggplot(data = profiles_20s, aes(x=drinks, y = num_drinking))+
+    geom_bar(position = "stack", stat = "identity", aes(fill=sex)) +
+    labs(x = "Drinking Habits", y = "Number of People") +
+    ggtitle("Drinking Habits Among Users in their 20s, by Sex")
+  ggplotly(gendrinks20)
+  
+gendrinks30<- ggplot(data = profiles_30s, aes(x=drinks, y = num_drinking))+
+    geom_bar(position = "stack", stat = "identity", aes(fill=sex)) +
+    labs(x = "Drinking Habits", y = "Number of People") +
+    ggtitle("Drinking Habits Among Users in their 30s, by Sex")
+  ggplotly(gendrinks30)
+  
+gendrinks40<- ggplot(data = profiles_40s, aes(x=drinks, y = num_drinking))+
+    geom_bar(position = "stack", stat = "identity", aes(fill=sex)) +
+    labs(x = "Drinking Habits", y = "Number of People") +
+    ggtitle("Drinking Habits Among Users in their 40s, by Sex")
+  ggplotly(gendrinks40)
+  
+gendrinks50<- ggplot(data = profiles_50s, aes(x=drinks, y = num_drinking))+
+    geom_bar(position = "stack", stat = "identity", aes(fill=sex)) +
+    labs(x = "Drinking Habits", y = "Number of People") +
+    ggtitle("Drinking Habits Among Users in their 50s, by Sex")
+  ggplotly(gendrinks50)
+  
+gendrinks60<- ggplot(data = profiles_60s, aes(x=drinks, y = num_drinking))+
+    geom_bar(position = "stack", stat = "identity", aes(fill=sex)) +
+    labs(x = "Drinking Habits", y = "Number of People") +
+    ggtitle("Drinking Habits Among Users in their 60s, by Sex")
+  ggplotly(gendrinks60)
+```
+
+```{r, echo=FALSE, fig.width=12, fig.height=6}
+profiles_smoke <- filter(profiles, smokes == "yes") %>%
+  separate(ethnicity, c("eth1", "eth_rest"), sep=",") %>%
+  na.omit(eth1) %>%
+  group_by(sex, eth1) %>%
+  tally() %>%
+  rename(eth_count = n) 
+
+ggplot(data=profiles_smoke, aes(x = eth1, y = eth_count)) +
+  geom_bar(position = "stack", stat = "identity", aes(fill=sex)) +
+  labs(x = "Primary Ethnicity", y = "Number of Users") +
+  ggtitle("Smokers by Ethnicity and Sex")
+```
+  
+For this last graph on smokers, it is interesting to note the high population of ethnic minorities who smoke regularly, particularly among men.
